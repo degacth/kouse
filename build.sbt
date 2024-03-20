@@ -12,6 +12,7 @@ lazy val root = project
 
     libraryDependencies ++= Seq(
       "com.1stleg" % "jnativehook" % "2.1.0",
+      "ch.qos.logback" % "logback-classic" % "1.5.3",
 
       "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
       "com.typesafe.akka" %% "akka-actor-testkit-typed" % AkkaVersion % Test,
