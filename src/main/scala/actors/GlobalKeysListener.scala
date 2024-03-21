@@ -1,5 +1,6 @@
 package actors
 
+import akka.NotUsed
 import akka.actor.typed.{ActorRef, Behavior, PostStop}
 import akka.actor.typed.scaladsl.Behaviors
 import org.jnativehook.GlobalScreen
@@ -20,7 +21,7 @@ object GlobalKeysListener:
   private def setHotKeyPressed(code: Int, value: Boolean): Unit = pressedHotKeys(code) = value
   private def isAllKeyPressed: Boolean = pressedHotKeys.values.forall(identity)
 
-  def apply[T](hotKeysReceiver: ActorRef[T], message: T): Behavior[Nothing] = Behaviors.setup: ctx =>
+  def apply[T](hotKeysReceiver: ActorRef[T], message: T): Behavior[NotUsed] = Behaviors.setup: ctx =>
     import ctx.*
 
     GlobalScreen.registerNativeHook()
