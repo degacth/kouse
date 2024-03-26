@@ -2,72 +2,101 @@ package actors.ui
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
+import managers.{CanvasManager, CharsManager, ScreenManager}
+import models.MarkedZone
 
-import java.awt.{Color, Font, Graphics}
 import java.awt.event.{KeyAdapter, KeyEvent}
-import javax.swing.*
+import java.awt.{Graphics, Rectangle}
+import javax.swing.{JFrame, JPanel, SwingUtilities, WindowConstants}
 
-
-object Frame extends JFrame:
+object Frame:
   enum Command:
     case Show
     case Hide
+    case SelectZone(name: String)
 
   import Command.*
   private type Bhv = Behavior[Command]
 
-  private val handler = ScreenHandler()
-
-  private val pane = new JPanel:
-    override def paintComponent(g: Graphics): Unit =
-      g.drawImage(handler.screenShot, 0, 0, null)
-
-      val font = Font(Font.MONOSPACED, Font.PLAIN, 16)
-      g.setFont(font)
-      g.setColor(Color.RED)
-
-      val ascent = g.getFontMetrics.getAscent / 2
-
-      handler.fullScreenParts.foreach: part =>
-        g.drawRect(part.left, part.top, part.w, part.h)
-        g.drawString(part.text, part.left + part.w / 2 - ascent, part.top + part.h / 2 + ascent)
-
   def apply(): Bhv = Behaviors.setup: ctx =>
+    var zones = Option.empty[Seq[MarkedZone]]
+    val frame = JFrame()
+    val panel = new JPanel:
+      override def paintComponent(canvas: Graphics): Unit = zones.foreach: zs =>
+        val screenLocation = getLocationOnScreen
+        val bounds = getBounds
 
-    val self = this
-    add(pane)
+        CanvasManager.drawBackground(
+          canvas,
+          ScreenManager.screenShot(
+            Rectangle(screenLocation.x, screenLocation.y, bounds.width, bounds.height)
+          )
+        )
+        CanvasManager.drawGrid(canvas, zs)
 
-    addKeyListener:
-      new KeyAdapter:
-        override def keyPressed(e: KeyEvent): Unit =
-          ()
-    //          getGraphicsConfiguration.getDevice.setFullScreenWindow(null)
-    //          self.setSize(300, 200)
-    //          self.setLocation(300, 200)
+        canvas.drawRect(0, 0, bounds.width - 1, bounds.height - 1)
+
+    import ctx.*
+    import frame.*
+
+    import SwingUtilities.invokeLater
+    val fullScreen = getGraphicsConfiguration.getDevice.setFullScreenWindow(_)
+
+    add(panel)
 
     setFocusable(true)
     setTitle("Kouse")
     setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE)
     setUndecorated(true)
+    setAlwaysOnTop(true)
+
+    addKeyListener:
+      new KeyAdapter:
+        override def keyPressed(e: KeyEvent): Unit =
+          CharsManager.keyToZoneName(KeyEvent.getKeyText(e.getKeyCode), e.isShiftDown).foreach: name =>
+            self ! SelectZone(name)
+
+    def activated: Bhv =
+      invokeLater: () =>
+        fullScreen(frame)
+        setVisible(true)
+        zones = Option(CharsManager.generateZones(getBounds))
+
+      Behaviors.receiveMessage:
+        case Hide => deactivated
+        case SelectZone(name) =>
+          nextSelect(name)
+        case _ => Behaviors.unhandled
+
+    def nextSelect(name: String): Bhv =
+      val zone = zones.flatMap(_.find(_.text == name))
+      invokeLater: () =>
+        zone.foreach: z =>
+          fullScreen(null)
+          setLocation(z.bounds.x, z.bounds.y)
+          setSize(z.bounds.width, z.bounds.height)
+          zones = Option(CharsManager.generateZones(getBounds))
+
+      Behaviors.receiveMessage:
+        case SelectZone(name) =>
+          val location = getLocationOnScreen
+          setVisible(false)
+          val zone = CharsManager.findZone(name, zones)
+          zone.foreach: z =>
+            ScreenManager.click(location.x + z.bounds.x + z.bounds.width / 2, location.y + z.bounds.y + z.bounds.height / 2)
+
+          deactivated
+        case Hide => deactivated
+        case _ => Behaviors.unhandled
 
     def deactivated: Bhv =
-      SwingUtilities.invokeLater: () =>
-        getGraphicsConfiguration.getDevice.setFullScreenWindow(null)
+      zones = Option.empty
+      invokeLater: () =>
+        fullScreen(null)
         setVisible(false)
 
       Behaviors.receiveMessage:
         case Show => activated
         case _ => Behaviors.unhandled
 
-    def activated: Bhv =
-      SwingUtilities.invokeLater: () =>
-        getGraphicsConfiguration.getDevice.setFullScreenWindow(this)
-        setVisible(true)
-
-      Behaviors.receiveMessage:
-        case Hide => deactivated
-        case _ => Behaviors.unhandled
-
-    Behaviors.receiveMessage:
-        case Show => activated
-        case _ => Behaviors.unhandled
+    deactivated

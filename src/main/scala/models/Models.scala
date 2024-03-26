@@ -1,3 +1,5 @@
 package models
 
-case class ScreenPart(text: String, top: Int, left: Int, w: Int, h: Int)
+import java.awt.Rectangle
+
+case class MarkedZone(text: String, bounds: Rectangle)
