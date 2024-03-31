@@ -1,11 +1,12 @@
 package actors.ui
 
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import managers.{CanvasManager, CharsManager, ScreenManager}
 import models.MarkedZone
 
 import java.awt.event.{KeyAdapter, KeyEvent}
+import java.awt.image.BufferedImage
 import java.awt.{Graphics, Rectangle}
 import javax.swing.{JFrame, JPanel, SwingUtilities, WindowConstants}
 
@@ -18,20 +19,15 @@ object Frame:
   import Command.*
   private type Bhv = Behavior[Command]
 
-  def apply(): Bhv = Behaviors.setup: ctx =>
+  def apply(window: ActorRef[Window.Command]): Bhv = Behaviors.setup: ctx =>
     var zones = Option.empty[Seq[MarkedZone]]
+    var screenBg = Option.empty[BufferedImage]
     val frame = JFrame()
     val panel = new JPanel:
       override def paintComponent(canvas: Graphics): Unit = zones.foreach: zs =>
-        val screenLocation = getLocationOnScreen
         val bounds = getBounds
 
-        CanvasManager.drawBackground(
-          canvas,
-          ScreenManager.screenShot(
-            Rectangle(screenLocation.x, screenLocation.y, bounds.width, bounds.height)
-          )
-        )
+        screenBg.foreach(CanvasManager.drawBackground(canvas, _))
         CanvasManager.drawGrid(canvas, zs)
 
         canvas.drawRect(0, 0, bounds.width - 1, bounds.height - 1)
@@ -57,6 +53,9 @@ object Frame:
             self ! SelectZone(name)
 
     def activated: Bhv =
+      log.info("activated")
+
+      screenBg = Option(ScreenManager.fullScreenShot)
       invokeLater: () =>
         fullScreen(frame)
         setVisible(true)
@@ -69,12 +68,18 @@ object Frame:
         case _ => Behaviors.unhandled
 
     def nextSelect(name: String): Bhv =
+      log.info("frame next select")
       val zone = zones.flatMap(_.find(_.text == name))
+
       invokeLater: () =>
         zone.foreach: z =>
           fullScreen(null)
           setLocation(z.bounds.x, z.bounds.y)
           setSize(z.bounds.width, z.bounds.height)
+
+          val screenLocation = getLocationOnScreen
+          val screenBounds = getBounds
+          screenBg = Option(ScreenManager.screenShot(Rectangle(screenLocation.x, screenLocation.y, screenBounds.width, screenBounds.height)))
           zones = Option(CharsManager.generateZones(getBounds))
 
       Behaviors.receiveMessage:
@@ -85,11 +90,13 @@ object Frame:
           zone.foreach: z =>
             ScreenManager.click(location.x + z.bounds.x + z.bounds.width / 2, location.y + z.bounds.y + z.bounds.height / 2)
 
-          deactivated
+          window ! Window.Command.ToggleActivate
+          Behaviors.same
         case Hide => deactivated
         case _ => Behaviors.unhandled
 
     def deactivated: Bhv =
+      log.info("frame deactivated")
       zones = Option.empty
       invokeLater: () =>
         fullScreen(null)
@@ -97,6 +104,7 @@ object Frame:
 
       Behaviors.receiveMessage:
         case Show => activated
+        case SelectZone(_) => Behaviors.same
         case _ => Behaviors.unhandled
 
     deactivated

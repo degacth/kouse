@@ -9,13 +9,12 @@ import javax.swing.{ImageIcon, SwingUtilities}
 
 object Tray:
   private type Bhv = Behavior[NotUsed]
-
-  private val tray = SystemTray.getSystemTray
+  private lazy val tray = SystemTray.getSystemTray
 
   def apply(): Bhv = Behaviors.setup: ctx =>
     import ctx.*
 
-    val trayIcon = new TrayIcon(createImage("/images/bulb.gif", "Kouse"))
+    val trayIcon = TrayIcon(createImage("/images/bulb.gif", "Kouse"))
 
     val initTray: Runnable = () =>
       tray.add(trayIcon)
