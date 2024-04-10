@@ -15,7 +15,7 @@ object Window:
   def apply(): Bhv = Behaviors.setup: ctx =>
     import ctx.*
 
-    val frame = spawn(Frame(self), "frame")
+    val frame = spawn(Frame(), "frame")
     if SystemTray.isSupported then spawn(Tray(), "tray")
 
     def activated: Bhv =
